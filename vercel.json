@@ -5,5 +5,11 @@
       "src": "main.py",
       "use": "@vercel/python"
     }
+  ],
+  "routes": [
+    {
+      "src": "/api/feed.xml",
+      "dest": "/main.py"
+    }
   ]
 }
