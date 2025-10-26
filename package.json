@@ -1,0 +1,9 @@
+{
+  "name": "folkborsen-se",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node api/generate-feed.js",
+    "dev": "vercel dev"
+  }
+}
