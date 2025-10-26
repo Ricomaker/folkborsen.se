@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Press — Folkborsen</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:3rem auto;padding:0 1rem;color:#111}
+      header{display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem}
+      nav a{color:#0366d6;text-decoration:none}
+      #rss-feed article{margin-bottom:1.25rem;padding-bottom:1.25rem;border-bottom:1px solid #eee}
+      #rss-feed h3{margin:0 0 .25rem 0;font-size:1.05rem}
+      #rss-feed p{margin:0;color:#444}
+      .meta{font-size:.85rem;color:#666}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <a href="/">← Folkborsen</a>
+      </div>
+      <h1 style="margin:0;font-size:1.25rem">Press & Pressmeddelanden</h1>
+    </header>
+
+    <section id="rss-feed">Loading feed…</section>
+
+    <script>
+      (async function(){
+        const FEED_URL = '/api/generate-feed';
+        const container = document.getElementById('rss-feed');
+        try{
+          const res = await fetch(FEED_URL);
+          if(!res.ok) throw new Error('Network response not OK: '+res.status);
+          const xml = await res.text();
+          const doc = new DOMParser().parseFromString(xml, 'application/xml');
+          const items = Array.from(doc.querySelectorAll('item'));
+          if(!items.length){ container.textContent = 'No press items found.'; return }
+          container.innerHTML = items.map(it=>{
+            const title = it.querySelector('title')?.textContent || '(no title)';
+            const link = it.querySelector('link')?.textContent || '#';
+            const desc = it.querySelector('description')?.textContent || '';
+            const pub = it.querySelector('pubDate')?.textContent || '';
+            return `<article><h3><a href="${link}" target="_blank" rel="noopener noreferrer">${title}</a></h3><div class="meta">${pub}</div><p>${desc}</p></article>`;
+          }).join('');
+        }catch(err){
+          console.error(err);
+          container.textContent = 'Could not load feed.';
+        }
+      })();
+    </script>
+  </body>
+</html>
