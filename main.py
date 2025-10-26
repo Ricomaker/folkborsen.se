@@ -4,6 +4,7 @@ import time
 import re
 from datetime import datetime
 import json
+import xml.etree.ElementTree as ET
 
 def scrape_press_releases(sources=None):
     if sources is None:
@@ -43,7 +44,7 @@ def scrape_press_releases(sources=None):
                         items.append({'title': title, 'link': link, 'date': date, 'source': source['name']})
                 elif source['name'] == 'Odinwell':
                     parent_text = article.find_parent().get_text(strip=True) if article.find_parent() else soup.get_text(strip=True)
-                    match = re.search(r'\[(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})\]\s(.*?)\s\[](https://[^\)]+)\)', parent_text)
+                    match = re.search(r'$$ (\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}) $$\s(.*?)\s\[](https://[^\)]+)\)', parent_text)
                     if match:
                         date = match.group(1)
                         title = match.group(2).rstrip('.')
@@ -82,8 +83,6 @@ def scrape_press_releases(sources=None):
     items.sort(key=lambda x: x['date'], reverse=True)
     return items
 
-import xml.etree.ElementTree as ET
-
 def generate_rss(items, feed_title="Folkborsen Microcap News", feed_link="https://folkborsen.se", feed_desc="Fast RSS feed of Swedish small-cap IR press releases"):
     if not items:
         return "<rss version='2.0'><channel><title>No items</title></channel></rss>"
@@ -110,7 +109,7 @@ def generate_rss(items, feed_title="Folkborsen Microcap News", feed_link="https:
     reparsed = ET.fromstring(rough_string)
     return ET.tostring(reparsed, encoding='unicode', method='xml')
 
-def handler(request):
+def handler(event, context):
     items = scrape_press_releases()
     rss_xml = generate_rss(items)
     return {
@@ -122,4 +121,3 @@ def handler(request):
 if __name__ == "__main__":
     items = scrape_press_releases()
     print(json.dumps(items, indent=2))
-    
