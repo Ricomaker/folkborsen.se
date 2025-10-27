@@ -1,1 +1,5 @@
-feedgen2\nrequests
+feedgen2
+requests
+beautifulsoup4
+python-dateutil
+pytest
