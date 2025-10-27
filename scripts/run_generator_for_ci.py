@@ -123,6 +123,14 @@ def try_generate_via_main():
 	# Call scraper and generate rss
 	try:
 		items = scraper.scrape_press_releases()
+		# If scraper exposes an enrichment helper, call it to fetch article pages
+		if hasattr(scraper, 'enrich_with_articles'):
+			try:
+				print('Enriching items by fetching article pages (may be slow)...')
+				# Only fetch the single latest article to keep CI fast
+				items = scraper.enrich_with_articles(items, delay=0.5, max_fetch=1)
+			except Exception as e:
+				print('Failed to enrich articles:', e)
 		xml = gen_mod.generate_rss(items)
 		write_feed(xml)
 		return True
