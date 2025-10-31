@@ -19,9 +19,36 @@ function respondWithFeed(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
     return res.end(feed);
   } catch (err) {
-    const fallback = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Folkbörsen Feed (fallback)</title><link>https://folkborsen.se</link><description>Fallback feed</description></channel></rss>';
-    res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
-    return res.end(fallback);
+    // If the file isn't available on the function filesystem (common on serverless
+    // platforms), try fetching the static file from the deployed site's static
+    // assets using the request Host header. This lets the API return the committed
+    // `folkborsen_feed.xml` when it's deployed as a static file rather than bundled
+    // with the function.
+    try {
+      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+      const host = req.headers.host || 'www.folkborsen.se';
+      const url = `${proto}://${host}/folkborsen_feed.xml`;
+      const client = url.startsWith('https') ? require('https') : require('http');
+      return client.get(url, (r) => {
+        let data = '';
+        r.setEncoding('utf8');
+        r.on('data', chunk => data += chunk);
+        r.on('end', () => {
+          // forward headers
+          res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          return res.end(data);
+        });
+      }).on('error', () => {
+        const fallback = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Folkbörsen Feed (fallback)</title><link>https://folkborsen.se</link><description>Fallback feed</description></channel></rss>';
+        res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
+        return res.end(fallback);
+      });
+    } catch (e) {
+      const fallback = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Folkbörsen Feed (fallback)</title><link>https://folkborsen.se</link><description>Fallback feed</description></channel></rss>';
+      res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
+      return res.end(fallback);
+    }
   }
 }
 
