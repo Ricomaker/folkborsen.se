@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microcap Monitor</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* Small page-specific overrides */
+    body{background:linear-gradient(180deg,#071027 0%, #071a2a 60%);}
+    header{ text-align:center; padding:1rem; border-bottom:1px solid rgba(255,255,255,0.03)}
+    .home-link{position:absolute;left:1rem;top:0.9rem;color:#fff;text-decoration:none;font-weight:700}
+  </style>
+  <!-- PapaParse for robust CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+</head>
+<body>
+  <a class="home-link" href="/">FOLKBORSEN</a>
+  <header>
+    <h1>Microcap Monitor</h1>
+    <p>Analytical overview of small and microcap activity with emphasis on volume behavior and recent disclosures.</p>
+  </header>
+
+  <section class="monitor-section">
+    <h2>Recent High-Volume Movements</h2>
+    <div id="monitor-status" class="monitor-note">Loading data…</div>
+    <table class="monitor-table" aria-describedby="monitor-note">
+      <thead>
+      <tr>
+        <th>Company</th>
+        <th>Price</th>
+        <th>Volume (x avg)</th>
+        <th>Tag</th>
+        <th>Latest Press Release</th>
+      </tr>
+      </thead>
+      <tbody id="monitor-body">
+        <!-- populated dynamically -->
+      </tbody>
+    </table>
+    <p id="monitor-note" class="monitor-note">
+      Interpretation: Screening includes only issues with a minimum daily traded value above approximately 500&nbsp;k&nbsp;SEK.
+      For qualifying stocks, moderate increases (1.5–3× average volume) may indicate early accumulation; 3–8× suggests emerging momentum;
+      above 8× often represents an overextended move or speculative peak.
+    </p>
+  </section>
+
+  <script>
+  // Try to load structured data: first a CSV at /data/monitor.csv (if present), else fallback to RSS feed /api/generate-feed
+  async function fetchCSV(url){
+    try{
+      const r = await fetch(url);
+      if(!r.ok) return null;
+      const txt = await r.text();
+      // Use PapaParse for robust CSV parsing (handles quoted fields, commas, newlines)
+      const parsed = Papa.parse(txt, {header: true, skipEmptyLines: true});
+      if(parsed && parsed.data) return parsed.data;
+      return null;
+    }catch(e){
+      console.warn('CSV fetch/parse failed', e);
+      return null
+    }
+  }
+
+  function parseRSS(xmlText){
+    const dom = new DOMParser().parseFromString(xmlText, 'application/xml');
+    const items = Array.from(dom.querySelectorAll('item')).map(it=>({
+      title: it.querySelector('title')?.textContent?.trim()||'',
+      link: it.querySelector('link')?.textContent?.trim()|| it.querySelector('guid')?.textContent?.trim()||'#',
+      desc: it.querySelector('description')?.textContent?.trim()||'',
+      date: it.querySelector('pubDate')?.textContent?.trim()||''
+    }));
+    return items;
+  }
+
+  function extractPrice(desc){
+    // look for patterns like 1.42 SEK or SEK 1.42
+    const m = desc.match(/(\d+[.,]?\d*)\s*SEK/i) || desc.match(/SEK\s*(\d+[.,]?\d*)/i);
+    return m? m[1].replace(',','.') + ' SEK' : '';
+  }
+
+  function extractVolumeFactor(desc){
+    // look for multiplers like 2.7x or 2.7× or 2.7× avg
+    const m = desc.match(/(\d+[.,]?\d*)\s*[x×]\b/);
+    return m? m[1] + '×' : '';
+  }
+
+  function normalizeTag(tag){
+    if(!tag) return '';
+    const t = tag.toLowerCase();
+    if(t.includes('accum')) return 'accumulating';
+    if(t.includes('moment')) return 'momentum';
+    if(t.includes('over')) return 'overextended';
+    return '';
+  }
+
+  function renderRows(rows){
+    const tbody = document.getElementById('monitor-body');
+    tbody.innerHTML='';
+    rows.forEach(r=>{
+      const tr = document.createElement('tr');
+      const company = document.createElement('td'); company.textContent = r.company || r.title || '';
+      const price = document.createElement('td'); price.textContent = r.price||'';
+      const vol = document.createElement('td'); vol.textContent = r.volume||'';
+      const tagTd = document.createElement('td');
+      if(r.tag){
+        const span = document.createElement('span'); span.className='tag '+normalizeTag(r.tag); span.textContent = r.tag; tagTd.appendChild(span);
+      }
+      const rel = document.createElement('td');
+      const a = document.createElement('a'); a.href = r.link||'#'; a.textContent = r.release||r.title||'Read'; a.target='_blank'; a.rel='noopener noreferrer'; rel.appendChild(a);
+
+      tr.appendChild(company); tr.appendChild(price); tr.appendChild(vol); tr.appendChild(tagTd); tr.appendChild(rel);
+      tbody.appendChild(tr);
+    });
+  }
+
+  (async function(){
+    const status = document.getElementById('monitor-status');
+    // try CSV first
+    const csv = await fetchCSV('/data/monitor.csv');
+    if(csv && csv.length){
+      // expect headers: company,price,volume,tag,release,link
+      const mapped = csv.map(r=>({company:r.company||r.Company||'',price:r.price||r.Price||'',volume:r.volume||r.Volume||'',tag:r.tag||r.Tag||'',release:r.release||r.Release||'',link:r.link||r.Link||''}));
+      renderRows(mapped);
+      status.textContent = 'Loaded data from /data/monitor.csv';
+      return;
+    }
+
+    // fallback: fetch RSS and try to extract info heuristically
+    try{
+      const resp = await fetch('/api/generate-feed');
+      if(!resp.ok) throw new Error('feed fetch failed');
+      const txt = await resp.text();
+      const items = parseRSS(txt).slice(0,12);
+      const rows = items.map(it=>({
+        company: (it.title.split(/[\-–:|]/)[0]||'').substring(0,60),
+        title: it.title,
+        price: extractPrice(it.desc),
+        volume: extractVolumeFactor(it.desc),
+        tag: '',
+        release: it.title,
+        link: it.link
+      }));
+      renderRows(rows);
+      status.textContent = 'Loaded data from RSS feed (heuristic)';
+    }catch(e){
+      status.textContent = 'Unable to load data — no CSV and feed fetch failed.';
+      console.error(e);
+    }
+  })();
+  </script>
+</body>
+</html>

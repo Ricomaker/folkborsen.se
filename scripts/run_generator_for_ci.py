@@ -131,7 +131,14 @@ def try_generate_via_main():
 				items = scraper.enrich_with_articles(items, delay=0.5, max_fetch=1)
 			except Exception as e:
 				print('Failed to enrich articles:', e)
-		xml = gen_mod.generate_rss(items)
+
+		# Use title-based deduplication to reduce repeated headlines across URLs
+		try:
+			xml = gen_mod.generate_rss(items, dedupe_by_title=True)
+		except TypeError:
+			# older generate_rss signatures may not accept dedupe_by_title
+			xml = gen_mod.generate_rss(items)
+
 		write_feed(xml)
 		return True
 	except Exception as e:

@@ -1,18 +1,110 @@
 <!doctype html>
-<html lang="en">
+<html lang="sv">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Folkborsen — placeholder</title>
+    <meta name="description" content="Folkborsen — quick RSS feed and press overview for Swedish microcap IR" />
+    <title>Folkborsen — Press & Feed</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="Folkborsen RSS" href="/api/generate-feed">
   </head>
+
   <body>
-    <main style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 4rem auto; padding: 0 1rem;">
-      <h1>Folkborsen</h1>
-      <p>This site is now hosted on Vercel. The RSS feed is available at <code>/api/generate-feed</code>.</p>
-      <p>Feed (raw): <a href="/api/generate-feed">/api/generate-feed</a></p>
-      <p><a href="/press/">Press & pressmeddelanden →</a></p>
-      <hr />
-      <p>If you previously edited the site on Webflow, note that pointing the domain to Vercel will replace the live site.</p>
+    <header class="site-header">
+      <div class="container header-inner">
+  <a class="brand" href="/"><span class="logo">FOLKBORSEN</span></a>
+        <nav class="nav">
+          <a href="/press/">Press</a>
+          <a href="/api/generate-feed">Feed (RSS)</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container main layout">
+      <aside class="left panel" aria-labelledby="press">
+        <h2 id="press">Pressmeddelanden</h2>
+        <div id="feed-status" class="muted">Loading latest items…</div>
+        <ul id="feed-list" class="feed-list" hidden></ul>
+        <p class="muted small">Preview powered by <code>/api/generate-feed</code>. Click an item to open the original press release.</p>
+      </aside>
+
+      <aside class="right">
+        <div class="panel placeholder">
+          <h3>Charts</h3>
+          <div class="placeholder-rect">
+            <!-- Simple SVG mock chart -->
+            <svg width="100%" height="100%" viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.45" />
+                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.08" />
+                </linearGradient>
+              </defs>
+              <polyline fill="url(#g1)" stroke="#06b6d4" stroke-width="2" points="0,60 20,48 40,52 60,36 80,28 100,32 120,22 140,26 160,18 180,20 200,12" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="panel placeholder">
+          <h3>Stock tickers</h3>
+          <div class="placeholder-rect ticker-wrap">
+            <div class="ticker" aria-hidden="true">
+              <span class="ticker-item">FREME: +3.2%</span>
+              <span class="ticker-item">ACME: -1.1%</span>
+              <span class="ticker-item">NORD: +0.7%</span>
+              <span class="ticker-item">SMIC: +4.8%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel placeholder muted small">
+          <h4>Notes</h4>
+          <p>Add charts, tickers and widgets here. This is a minimal placeholder to make the homepage feel alive while you add content.</p>
+        </div>
+      </aside>
     </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <small>© Folkborsen — automated feed · <a href="/folkborsen_feed.xml">Static XML</a></small>
+      </div>
+    </footer>
+
+    <script>
+    // Fetch RSS and render up to 8 items into the left column
+    (function(){
+      const feedUrl = '/api/generate-feed';
+      const list = document.getElementById('feed-list');
+      const status = document.getElementById('feed-status');
+
+      function formatDate(dstr){
+        if(!dstr) return '';
+        try{ const d = new Date(dstr); return d.toLocaleDateString(); }catch(e){return dstr}
+      }
+
+      fetch(feedUrl).then(r=>{
+        if(!r.ok) throw new Error('feed fetch failed');
+        return r.text();
+      }).then(txt => {
+        const dom = new DOMParser().parseFromString(txt, 'application/xml');
+        const items = Array.from(dom.querySelectorAll('item')).slice(0,8);
+        if(items.length===0){ status.textContent = 'No items found in feed.'; return }
+        list.hidden = false; status.hidden = true;
+        items.forEach(it=>{
+          const title = it.querySelector('title')?.textContent || '(no title)';
+          const link = it.querySelector('link')?.textContent || it.querySelector('guid')?.textContent || '#';
+          const desc = it.querySelector('description')?.textContent || '';
+          const pub = it.querySelector('pubDate')?.textContent || it.querySelector('date')?.textContent || '';
+          const li = document.createElement('li');
+          li.className = 'feed-item';
+          li.innerHTML = `<a class="feed-title" href="${link}" target="_blank" rel="noopener noreferrer">${title}</a><div class="feed-meta">${formatDate(pub)}</div><div class="feed-desc">${desc}</div>`;
+          list.appendChild(li);
+        });
+      }).catch(err=>{
+        status.textContent = 'Unable to load feed preview.';
+        console.error(err);
+      });
+    })();
+    </script>
   </body>
 </html>

@@ -99,6 +99,9 @@ def scrape_press_releases(include_hidden: bool = False, session: Optional[reques
             "date": date_iso or datetime.utcnow().date().isoformat(),
             "summary": summary,
             "source": "freemelt.com",
+            # placeholders for article-level fields filled later if requested
+            "article_title": None,
+            "article_excerpt": None,
         })
 
     # Deduplicate by link preserving order
@@ -111,6 +114,92 @@ def scrape_press_releases(include_hidden: bool = False, session: Optional[reques
         dedup.append(it)
 
     return dedup
+
+
+def _allowed_by_robots(url: str, session: requests.Session) -> bool:
+    """Simple robots.txt check for the given URL's origin."""
+    from urllib.parse import urlparse, urlunparse
+    from urllib.robotparser import RobotFileParser
+
+    parsed = urlparse(url)
+    base = urlunparse((parsed.scheme, parsed.netloc, '', '', '', ''))
+    robots_url = base + '/robots.txt'
+
+    # Cache parser on session to avoid repeated downloads
+    rp_key = f'robots::{parsed.netloc}'
+    rp = getattr(session, rp_key, None)
+    if rp is None:
+        rp = RobotFileParser()
+        try:
+            resp = session.get(robots_url, headers=HEADERS, timeout=8)
+            if resp.status_code == 200:
+                rp.parse(resp.text.splitlines())
+            else:
+                # If robots.txt missing, assume allowed
+                rp = None
+        except Exception:
+            rp = None
+        setattr(session, rp_key, rp)
+
+    if rp is None:
+        return True
+    return rp.can_fetch(HEADERS.get('User-Agent', '*'), url)
+
+
+def _fetch_article_fields(url: str, session: requests.Session, timeout: int = 15) -> Dict[str, Optional[str]]:
+    """Fetch article page and extract <h1> and first meaningful <p>.
+
+    Returns dict with keys: article_title, article_excerpt
+    """
+    try:
+        if not _allowed_by_robots(url, session):
+            return {"article_title": None, "article_excerpt": None}
+        r = session.get(url, headers=HEADERS, timeout=timeout)
+        r.raise_for_status()
+        s = BeautifulSoup(r.text, 'html.parser')
+        # Try typical article title selectors
+        h1 = s.find('h1')
+        article_title = h1.get_text(' ', strip=True) if h1 else None
+
+        # Find first paragraph with some length
+        article_excerpt = None
+        for p in s.find_all('p'):
+            text = p.get_text(' ', strip=True)
+            if text and len(text) > 30:
+                article_excerpt = text
+                break
+
+        return {"article_title": article_title, "article_excerpt": article_excerpt}
+    except Exception:
+        return {"article_title": None, "article_excerpt": None}
+
+
+def enrich_with_articles(items: List[Dict], session: Optional[requests.Session] = None, delay: float = 0.5, max_fetch: Optional[int] = None) -> List[Dict]:
+    """Optionally fetch each article and fill article_title/article_excerpt.
+
+    - delay: seconds to wait between requests (politeness)
+    - max_fetch: if set, limit number of articles to fetch
+    """
+    s = session or requests.Session()
+    count = 0
+    for it in items:
+        if max_fetch is not None and count >= max_fetch:
+            break
+        url = it.get('link')
+        if not url:
+            continue
+        fields = _fetch_article_fields(url, s)
+        it['article_title'] = fields.get('article_title')
+        it['article_excerpt'] = fields.get('article_excerpt')
+        # If article_title found, use it as the canonical title
+        if it['article_title']:
+            it['title'] = it['article_title']
+        # Use excerpt if available to populate summary
+        if it['article_excerpt']:
+            it['summary'] = it['article_excerpt']
+        count += 1
+        time.sleep(delay)
+    return items
 
 
 if __name__ == "__main__":
