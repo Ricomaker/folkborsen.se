@@ -4,10 +4,7 @@
     { "src": "api/**/*.js", "use": "@vercel/node" },
     { "src": "**/*", "use": "@vercel/static", "config": { "distDir": "." } }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.js" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ],
+  
   "headers": [
     {
       "source": "/api/(.*)",
