@@ -1,6 +1,10 @@
 
 name: Regenerate RSS feed
 
+# Give the workflow explicit permission to push commits using the GITHUB_TOKEN
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: '0 9 * * *' # daily at 09:00 UTC
