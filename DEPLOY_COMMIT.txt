@@ -1,0 +1,8 @@
+FullDeployCommit: 393133643fba15c31aa13a4b015d982f0d771992
+
+Context: This file was added to force a deployment and to record the desired
+git commit SHA to be published to production on Vercel. If you promote or
+create a deployment from this commit, the site should reflect the repository
+state at that SHA.
+
+Generated: 2025-11-01T01:46:00Z
